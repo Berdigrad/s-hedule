@@ -6,7 +6,7 @@
 <style id="theme-style"></style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{padding:1.5rem;transition:background .2s,color .2s}
+body{padding:1rem;transition:background .2s,color .2s}
 h1{font-size:20px;font-weight:500;margin-bottom:1rem}
 button{font-family:inherit;font-size:var(--fs);padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--btn-bg);color:var(--text);cursor:pointer;transition:background .15s}
 button:hover{background:var(--btn-hover)}
