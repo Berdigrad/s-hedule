@@ -87,6 +87,23 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 /* Top bar */
 .top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
+  body {
+  max-width: 100% !important;
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
+.card,
+.grid-wrap,
+.sched,
+.tabs,
+.modal {
+  max-width: 100% !important;
+}
+/* Если всё ещё есть ограничитель – перебиваем все возможные контейнеры */
+.container, .wrapper, main, article, .site-container {
+  max-width: 100% !important;
+  width: 100% !important;
+}
 </style>
 </head>
 <body>
