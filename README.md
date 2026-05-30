@@ -87,6 +87,65 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 /* Top bar */
 .top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{padding:.75rem}
+  h1{font-size:16px}
+  .top-bar{gap:.4rem}
+  .top-bar>div{gap:4px}
+  .top-bar button{font-size:11px;padding:5px 8px}
+
+  /* Tabs — горизонтальный скролл */
+  .tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{white-space:nowrap;flex-shrink:0}
+
+  .card{padding:.75rem}
+
+  /* Таблица — карточки вместо колонок */
+  .grid-wrap{overflow-x:visible}
+  table.sched{display:block}
+  table.sched thead{display:none}
+  table.sched tbody{display:block}
+  table.sched tr{display:block;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.75rem;overflow:hidden}
+  table.sched td{display:block;border:none;border-bottom:1px solid var(--border);padding:8px 10px}
+  table.sched td:last-child{border-bottom:none}
+  table.sched td:first-child{background:var(--th-bg);font-size:13px;min-width:unset}
+  table.sched td[data-date]:before{content:attr(data-date);display:block;font-size:11px;font-weight:600;color:var(--accent);margin-bottom:4px}
+  table.sched td.empty-cell{display:none}
+
+  /* Модалки — всегда по центру, на всю ширину */
+  .modal{
+    position:fixed !important;
+    top:50% !important;
+    left:50% !important;
+    transform:translate(-50%,-50%) !important;
+    width:calc(100vw - 24px) !important;
+    max-width:100% !important;
+    max-height:85vh !important;
+  }
+
+  /* Более крупные чекбоксы и строки выбора учеников */
+  .pick-item{padding:8px 6px;font-size:14px}
+  .pick-item input[type=checkbox]{width:18px;height:18px}
+  .pick-list{max-height:45vh}
+  .pick-class-header button{padding:4px 10px;font-size:12px}
+
+  /* Кнопки в ячейке таблицы */
+  .btn-assign{padding:4px 10px;font-size:12px}
+
+  /* Календарь */
+  .cal-day{padding:8px 2px;font-size:13px}
+
+  /* Кнопки подтверждения */
+  .modal-actions{flex-wrap:wrap}
+  .modal-actions button{flex:1;justify-content:center;padding:8px}
+
+  /* Строка добавления ученика */
+  .row{flex-wrap:nowrap}
+  .row input{min-width:0}
+}
 </style>
 </head>
 <body>
@@ -575,8 +634,9 @@ function renderSchedule(){
       html+='<td>'+hdr+'</td>';
       blockDates.forEach(function(d){
         var dayQ=sorted.filter(function(q){return q.date===d&&q.ts===slot.ts&&q.te===slot.te;});
-        if(!dayQ.length){html+='<td><span class="ghost">—</span></td>';return;}
-        html+='<td><div class="cell-inner">';
+        var dow=DAYS[(new Date(d).getDay()+6)%7];
+        if(!dayQ.length){html+='<td class="empty-cell" data-date="'+e(dow+' '+formatDateFull(d))+'"><span class="ghost">—</span></td>';return;}
+        html+='<td data-date="'+e(dow+' '+formatDateFull(d))+'"><div class="cell-inner">';
         dayQ.forEach(function(q, qi){
           var labelsHtml='';
           S.classes.forEach(function(c){
@@ -620,15 +680,14 @@ function openOverlay(id, anchorEl){
   ov.classList.add('open');
   var modal=ov.querySelector('.modal');
   if(!modal) return;
-  if(anchorEl){
+  var isMobile = window.innerWidth <= 600;
+  if(anchorEl && !isMobile){
     var r=anchorEl.getBoundingClientRect();
     var mw=380;
     var mhEst=Math.min(window.innerHeight*0.8, 520);
-    // X: align to button left, clamp to viewport
     var left=r.left;
     if(left+mw>window.innerWidth-8) left=window.innerWidth-mw-8;
     if(left<8) left=8;
-    // Y: prefer below button, flip above if not enough space
     var top;
     if(r.bottom+6+mhEst<=window.innerHeight){
       top=r.bottom+6;
@@ -639,9 +698,10 @@ function openOverlay(id, anchorEl){
     modal.style.left=left+'px';
     modal.style.transform='none';
   } else {
-    modal.style.top=Math.max(8, window.innerHeight/2-200)+'px';
-    modal.style.left='50%';
-    modal.style.transform='translateX(-50%)';
+    // center — used for mobile and fallback
+    modal.style.top='';
+    modal.style.left='';
+    modal.style.transform='';
   }
 }
 function closeOverlay(id){document.getElementById(id).classList.remove('open');}
