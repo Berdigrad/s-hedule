@@ -92,10 +92,11 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 <body>
 
 <div class="top-bar">
-  <h1>Расписание консультаций</h1>
+  <h1>Расписание консультаций <span id="sync-status" style="font-size:12px;font-weight:400;color:var(--muted);margin-left:8px"></span></h1>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button onclick="exportPng()" id="btn-export" style="font-size:12px">📷 Поделиться (PNG)</button>
     <button onclick="openOverlay('m-appear',this)" style="font-size:12px">⚙ Оформление</button>
+    <button onclick="resetAll()" style="font-size:12px;border-color:#ea580c;color:#9a3412">↺ Сброс</button>
   </div>
 </div>
 <div id="warn-bar" class="warn-bar"></div>
@@ -1109,9 +1110,119 @@ function drawPngCell(ctx,x,y,w,h,fill,stroke){
   ctx.strokeStyle=stroke;ctx.lineWidth=0.5;ctx.strokeRect(x,y,w,h);
 }
 
+// ===================== CLOUD SYNC (JSONBin.io) =====================
+var BIN_ID  = '6a1a425d21f9ee59d29c4db6';
+var API_KEY = '$2a$10$CYLuejjwj9ruPCJltdfUK.WT1WODipV1ljGwzJgjcVAgLxYbPIPSi';
+var BIN_URL = 'https://api.jsonbin.io/v3/b/' + BIN_ID;
+var _saveTimer = null;
+var _lastSaveData = '';
+
+function getAppearance(){
+  return {
+    themeIdx: curTheme,
+    fontSize:  document.getElementById('sel-size')   ? document.getElementById('sel-size').value   : '13',
+    fontFam:   document.getElementById('sel-font')   ? document.getElementById('sel-font').value   : 'system-ui,-apple-system,sans-serif',
+    radius:    document.getElementById('sel-radius') ? document.getElementById('sel-radius').value : '8px'
+  };
+}
+
+function saveState(){
+  var data = {
+    classes:  S.classes,
+    consults: S.consults,
+    schedule: S.schedule,
+    appear:   getAppearance()
+  };
+  var json = JSON.stringify(data);
+  if(json === _lastSaveData) return; // nothing changed
+  _lastSaveData = json;
+
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(function(){
+    fetch(BIN_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': API_KEY,
+        'X-Bin-Versioning': 'false'
+      },
+      body: json
+    }).catch(function(err){ console.warn('Сохранение не удалось:', err); });
+  }, 800); // debounce 800ms
+}
+
+function loadState(callback){
+  var statusEl = document.getElementById('sync-status');
+  if(statusEl) statusEl.textContent = '⏳ Загрузка...';
+  fetch(BIN_URL + '/latest', {
+    headers: { 'X-Master-Key': API_KEY }
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    var saved = res.record;
+    if(saved && saved.classes  && saved.classes.length)  S.classes  = saved.classes;
+    if(saved && saved.consults && saved.consults.length) S.consults = saved.consults;
+    if(saved && saved.schedule) S.schedule = saved.schedule;
+    if(saved && saved.appear){
+      var a = saved.appear;
+      if(a.fontSize  && document.getElementById('sel-size'))   document.getElementById('sel-size').value   = a.fontSize;
+      if(a.fontFam   && document.getElementById('sel-font'))   document.getElementById('sel-font').value   = a.fontFam;
+      if(a.radius    && document.getElementById('sel-radius')) document.getElementById('sel-radius').value = a.radius;
+      if(typeof a.themeIdx === 'number') curTheme = a.themeIdx;
+    }
+    if(statusEl) statusEl.textContent = '✓ Синхронизировано';
+    setTimeout(function(){ if(statusEl) statusEl.textContent = ''; }, 2000);
+    if(callback) callback();
+  })
+  .catch(function(err){
+    console.warn('Загрузка не удалась:', err);
+    if(statusEl) statusEl.textContent = '⚠ Нет связи';
+    if(callback) callback();
+  });
+}
+
+// Auto-reload every 30s to pick up changes from other users
+setInterval(function(){
+  fetch(BIN_URL + '/latest', { headers: { 'X-Master-Key': API_KEY } })
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    var saved = res.record;
+    var incoming = JSON.stringify({classes:saved.classes,consults:saved.consults,schedule:saved.schedule});
+    var current  = JSON.stringify({classes:S.classes,   consults:S.consults,   schedule:S.schedule});
+    if(incoming !== current){
+      if(saved.classes  && saved.classes.length)  S.classes  = saved.classes;
+      if(saved.consults && saved.consults.length) S.consults = saved.consults;
+      if(saved.schedule) S.schedule = saved.schedule;
+      _render(); // render without triggering save
+    }
+  }).catch(function(){});
+}, 30000);
+
+// Patch render() to auto-save after every change
+var _render = render;
+render = function(){
+  _render();
+  saveState();
+};
+
+// Also save when appearance changes
+var _applyTheme = applyTheme;
+applyTheme = function(idx){
+  _applyTheme(idx);
+  saveState();
+};
+
+// Reset button
+function resetAll(){
+  if(!confirm('Сбросить все данные к исходным? Это нельзя отменить.')) return;
+  location.reload();
+}
+
 initSwatches();
-applyTheme(0);
-render();
+loadState(function(){
+  applyTheme(curTheme);
+  render();
+});
 </script>
 </body>
 </html>
