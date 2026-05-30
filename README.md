@@ -6,7 +6,7 @@
 <style id="theme-style"></style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{padding:0.5rem 0;transition:background .2s,color .2s}
+body{padding:1.5rem;transition:background .2s,color .2s}
 h1{font-size:20px;font-weight:500;margin-bottom:1rem}
 button{font-family:inherit;font-size:var(--fs);padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--btn-bg);color:var(--text);cursor:pointer;transition:background .15s}
 button:hover{background:var(--btn-hover)}
@@ -87,23 +87,6 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 /* Top bar */
 .top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
-  body {
-  max-width: 100% !important;
-  padding-left: 0.5rem !important;
-  padding-right: 0.5rem !important;
-}
-.card,
-.grid-wrap,
-.sched,
-.tabs,
-.modal {
-  max-width: 100% !important;
-}
-/* Если всё ещё есть ограничитель – перебиваем все возможные контейнеры */
-.container, .wrapper, main, article, .site-container {
-  max-width: 100% !important;
-  width: 100% !important;
-}
 </style>
 </head>
 <body>
@@ -593,7 +576,7 @@ function renderSchedule(){
         var dayQ=sorted.filter(function(q){return q.date===d&&q.ts===slot.ts&&q.te===slot.te;});
         if(!dayQ.length){html+='<td><span class="ghost">—</span></td>';return;}
         html+='<td><div class="cell-inner">';
-        dayQ.forEach(function(q){
+        dayQ.forEach(function(q, qi){
           var labelsHtml='';
           S.classes.forEach(function(c){
             var lbl=assignLabel(q.id,c.id);
@@ -601,8 +584,9 @@ function renderSchedule(){
             var hasConf=getAssigned(q.id,c.id).some(function(n){return conflictStudents[n];});
             labelsHtml+='<div class="assign-label'+(hasConf?' conflict':'')+'">'+e(lbl)+'</div>';
           });
-          html+='<div style="margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--border)">';
-          if(dayQ.length>1) html+='<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:2px">'+e(q.subject)+(q.teacher?' · '+e(q.teacher):'')+'</div>';
+          if(qi>0) html+='<div style="height:1px;background:var(--border);margin:4px 0"></div>';
+          html+='<div style="margin-bottom:2px">';
+          html+='<div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:3px">'+e(q.subject)+(q.teacher?' · <span style="font-weight:400;color:var(--muted)">'+e(q.teacher)+'</span>':'')+'</div>';
           html+=labelsHtml||'<span class="ghost" style="font-size:11px">Никто не назначен</span>';
           html+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">'
             +'<button class="btn-assign" onclick="openPickModal(\''+e(q.id)+'\',this)">&#43; Назначить</button>'
