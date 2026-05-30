@@ -81,7 +81,18 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 .swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s}
 .swatch:hover{transform:scale(1.15)}
 .swatch.active{border-color:var(--text)}
-/* Legend */
+/* Auth */
+.role-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border)}
+.role-badge.viewer{background:var(--th-bg);color:var(--muted)}
+.role-badge.teacher{background:#e0f2e9;color:#166534;border-color:#bbf7d0}
+.role-badge.klass{background:#dbeafe;color:#1e40af;border-color:#93c5fd}
+.role-badge.zavuch{background:#fde8e0;color:#9a3412;border-color:#fca5a5}
+.auth-screen{position:fixed;inset:0;background:var(--card-bg);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem}
+.auth-box{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:2rem;width:320px;max-width:100%}
+.auth-box h2{font-size:18px;font-weight:500;margin-bottom:.25rem;color:var(--text)}
+.auth-box p{font-size:13px;color:var(--muted);margin-bottom:1.25rem}
+.auth-err{color:#9a3412;font-size:12px;margin-top:.5rem;display:none}
+
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:.75rem}
 .leg{display:flex;align-items:center;gap:5px}
 .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
@@ -152,10 +163,13 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 
 <div class="top-bar">
   <h1>Расписание консультаций <span id="sync-status" style="font-size:12px;font-weight:400;color:var(--muted);margin-left:8px"></span></h1>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <button onclick="exportPng()" id="btn-export" style="font-size:12px">📷 Поделиться (PNG)</button>
-    <button onclick="openOverlay('m-appear',this)" style="font-size:12px">⚙ Оформление</button>
-    <button onclick="resetAll()" style="font-size:12px;border-color:#ea580c;color:#9a3412">↺ Сброс</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <span id="role-badge" class="role-badge viewer">👁 Просмотр</span>
+    <button id="btn-login" onclick="openOverlay('m-login',this)" style="font-size:12px">🔑 Войти</button>
+    <button id="btn-logout" onclick="doLogout()" style="font-size:12px;display:none">Выйти</button>
+    <button onclick="exportPng()" id="btn-export" style="font-size:12px">📷 PNG</button>
+    <button onclick="openOverlay('m-appear',this)" style="font-size:12px">⚙</button>
+    <button id="btn-reset" onclick="resetAll()" style="font-size:12px;border-color:#ea580c;color:#9a3412;display:none">↺</button>
   </div>
 </div>
 <div id="warn-bar" class="warn-bar"></div>
@@ -166,7 +180,7 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 <div class="card">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
     <div class="sec-title" style="margin:0">Расписание</div>
-    <button onclick="openConsultModal(null,this)">+ Добавить консультацию</button>
+    <span id="add-consult-wrap"></span>
   </div>
   <div id="sched-root"></div>
   <div class="legend">
@@ -313,6 +327,37 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
     </div>
     <div class="modal-actions">
       <button onclick="closeOverlay('m-appear')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: вход -->
+<div class="overlay" id="m-login">
+  <div class="modal">
+    <h3>Вход</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Введите пароль для редактирования</p>
+    <div class="field"><label>Пароль</label>
+      <input id="f-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div id="login-err" class="auth-err">Неверный пароль</div>
+    <div class="modal-actions">
+      <button onclick="closeOverlay('m-login')">Отмена</button>
+      <button onclick="doLogin()">→ Войти</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: смена паролей (только завуч) -->
+<div class="overlay" id="m-passwords">
+  <div class="modal">
+    <h3>Управление паролями</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Оставьте поле пустым, чтобы не менять пароль</p>
+    <div class="field"><label>Пароль учителя</label><input id="f-pw-teacher" type="text" placeholder="Текущий: teacher2026"></div>
+    <div class="field"><label>Пароль классного руководителя</label><input id="f-pw-klass" type="text" placeholder="Текущий: klass2026"></div>
+    <div class="field"><label>Пароль завуча</label><input id="f-pw-zavuch" type="text" placeholder="Текущий: zavuch2026"></div>
+    <div class="modal-actions">
+      <button onclick="closeOverlay('m-passwords')">Отмена</button>
+      <button onclick="savePasswords()">✓ Сохранить</button>
     </div>
   </div>
 </div>
@@ -564,11 +609,30 @@ function renderTabs(){
     b.onclick=(function(id){return function(){S.active=id;render();};})(c.id);
     t.appendChild(b);
   });
-  var a=document.createElement('button');
-  a.className='tab dashed';
-  a.textContent='+ Класс';
-  a.onclick=function(){document.getElementById('f-class-name').value='';openOverlay('m-class',a);setTimeout(function(){document.getElementById('f-class-name').focus();},60);};
-  t.appendChild(a);
+  if(canManageClasses()){
+    var a=document.createElement('button');
+    a.className='tab dashed';
+    a.textContent='+ Класс';
+    a.onclick=function(){document.getElementById('f-class-name').value='';openOverlay('m-class',a);setTimeout(function(){document.getElementById('f-class-name').focus();},60);};
+    t.appendChild(a);
+  }
+  // Завуч: кнопка управления паролями
+  var pw=document.getElementById('btn-passwords');
+  if(!pw){
+    pw=document.createElement('button');
+    pw.id='btn-passwords';
+    pw.style.cssText='font-size:11px;padding:4px 10px;margin-left:4px';
+    pw.textContent='🔐 Пароли';
+    pw.onclick=function(){openOverlay('m-passwords',pw);};
+    var tabsEl=document.getElementById('tabs');
+    tabsEl.parentNode.insertBefore(pw, tabsEl.nextSibling);
+  }
+  pw.style.display=isZavuch()?'inline-flex':'none';
+  // Добавить консультацию — только для тех кто может редактировать
+  var wrap=document.getElementById('add-consult-wrap');
+  if(wrap) wrap.innerHTML=canEdit()
+    ?'<button onclick="openConsultModal(null,this)">+ Добавить консультацию</button>'
+    :'';
 }
 
 function renderClassPanel(){
@@ -580,15 +644,20 @@ function renderClassPanel(){
     :cls.students.map(function(s){
       return '<span class="chip">'+e(shortName(s))+'<button class="chip-x" onclick="removeStudent(\''+e(cls.id)+'\',\''+e(s)+'\')">×</button></span>';
     }).join('');
+  var delBtn = canManageClasses()
+    ? '<button class="btn-red" style="font-size:12px" onclick="askDelClass(\''+e(cls.id)+'\',this)">&#128465; Удалить класс</button>'
+    : '';
   p.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">'
     +'<div class="sec-title" style="margin:0">Ученики — '+e(cls.name)+' ('+cls.students.length+')</div>'
-    +'<button class="btn-red" style="font-size:12px" onclick="askDelClass(\''+e(cls.id)+'\',this)">&#128465; Удалить класс</button>'
+    +delBtn
     +'</div>'
-    +'<div class="chips">'+chips+'</div>'
-    +'<div class="row">'
-    +'<input id="inp-s" type="text" placeholder="Фамилия Имя" style="flex:1;min-width:140px" onkeydown="if(event.key===\'Enter\')addStudent(\''+e(cls.id)+'\')">'
-    +'<button onclick="addStudent(\''+e(cls.id)+'\')">+ Добавить</button>'
-    +'</div>';
+    +'<div class="chips">'+chips+'</div>';
+  if(canManageClasses()){
+    p.innerHTML+='<div class="row">'
+      +'<input id="inp-s" type="text" placeholder="Фамилия Имя" style="flex:1;min-width:140px" onkeydown="if(event.key===\'Enter\')addStudent(\''+e(cls.id)+'\')">'
+      +'<button onclick="addStudent(\''+e(cls.id)+'\')">+ Добавить</button>'
+      +'</div>';
+  }
 }
 
 function renderSchedule(){
@@ -649,12 +718,15 @@ function renderSchedule(){
           html+='<div style="margin-bottom:2px">';
           html+='<div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:3px">'+e(q.subject)+(q.teacher?' · <span style="font-weight:400;color:var(--muted)">'+e(q.teacher)+'</span>':'')+'</div>';
           html+=labelsHtml||'<span class="ghost" style="font-size:11px">Никто не назначен</span>';
-          html+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">'
-            +'<button class="btn-assign" onclick="openPickModal(\''+e(q.id)+'\',this)">&#43; Назначить</button>'
-            +'<button class="btn-assign" onclick="openCopyModal(\''+e(q.id)+'\',this)">&#128203; Копировать</button>'
-            +'<button class="btn-assign" onclick="openConsultModal(\''+e(q.id)+'\',this)">&#9998;</button>'
-            +'<button class="btn-assign btn-red" onclick="askDelConsult(\''+e(q.id)+'\',this)">&#128465;</button>'
-            +'</div></div>';
+          if(canEdit()){
+            html+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">'
+              +'<button class="btn-assign" onclick="openPickModal(\''+e(q.id)+'\',this)">&#43; Назначить</button>'
+              +'<button class="btn-assign" onclick="openCopyModal(\''+e(q.id)+'\',this)">&#128203; Копировать</button>'
+              +'<button class="btn-assign" onclick="openConsultModal(\''+e(q.id)+'\',this)">&#9998;</button>'
+              +'<button class="btn-assign btn-red" onclick="askDelConsult(\''+e(q.id)+'\',this)">&#128465;</button>'
+              +'</div>';
+          }
+          html+='</div>';
         });
         html+='</div></td>';
       });
@@ -1170,6 +1242,81 @@ function drawPngCell(ctx,x,y,w,h,fill,stroke){
   ctx.strokeStyle=stroke;ctx.lineWidth=0.5;ctx.strokeRect(x,y,w,h);
 }
 
+// ===================== AUTH =====================
+// Roles: 'viewer' | 'teacher' | 'klass' | 'zavuch'
+var AUTH = {
+  role: 'viewer',
+  passwords: {
+    teacher: 'teacher2026',
+    klass:   'klass2026',
+    zavuch:  'zavuch2026'
+  }
+};
+
+var ROLE_LABELS = {
+  viewer:  {icon:'👁',  label:'Просмотр',      cls:'viewer'},
+  teacher: {icon:'👩‍🏫', label:'Учитель',        cls:'teacher'},
+  klass:   {icon:'📋',  label:'Кл. руководитель', cls:'klass'},
+  zavuch:  {icon:'🔓',  label:'Завуч',          cls:'zavuch'}
+};
+
+function canEdit(){   return AUTH.role==='teacher'||AUTH.role==='klass'||AUTH.role==='zavuch'; }
+function canManageClasses(){ return AUTH.role==='klass'||AUTH.role==='zavuch'; }
+function isZavuch(){  return AUTH.role==='zavuch'; }
+
+function doLogin(){
+  var pw = document.getElementById('f-password').value;
+  var err = document.getElementById('login-err');
+  var matched = null;
+  // Check against stored passwords (may be updated by zavuch)
+  var passwords = AUTH.passwords;
+  if(pw === passwords.zavuch)  matched='zavuch';
+  else if(pw === passwords.klass)   matched='klass';
+  else if(pw === passwords.teacher) matched='teacher';
+
+  if(!matched){ err.style.display='block'; return; }
+  err.style.display='none';
+  document.getElementById('f-password').value='';
+  AUTH.role = matched;
+  try{ sessionStorage.setItem('auth_role', matched); }catch(e){}
+  closeOverlay('m-login');
+  applyRoleUI();
+  render();
+}
+
+function doLogout(){
+  AUTH.role='viewer';
+  try{ sessionStorage.removeItem('auth_role'); }catch(e){}
+  applyRoleUI();
+  render();
+}
+
+function savePasswords(){
+  var pt = document.getElementById('f-pw-teacher').value.trim();
+  var pk = document.getElementById('f-pw-klass').value.trim();
+  var pz = document.getElementById('f-pw-zavuch').value.trim();
+  if(pt) AUTH.passwords.teacher = pt;
+  if(pk) AUTH.passwords.klass   = pk;
+  if(pz) AUTH.passwords.zavuch  = pz;
+  document.getElementById('f-pw-teacher').value='';
+  document.getElementById('f-pw-klass').value='';
+  document.getElementById('f-pw-zavuch').value='';
+  // Save passwords to cloud too
+  saveState();
+  closeOverlay('m-passwords');
+  alert('Пароли обновлены!');
+}
+
+function applyRoleUI(){
+  var r = ROLE_LABELS[AUTH.role];
+  var badge = document.getElementById('role-badge');
+  badge.textContent = r.icon+' '+r.label;
+  badge.className = 'role-badge '+r.cls;
+  document.getElementById('btn-login').style.display  = AUTH.role==='viewer'?'':'none';
+  document.getElementById('btn-logout').style.display = AUTH.role==='viewer'?'none':'';
+  document.getElementById('btn-reset').style.display  = isZavuch()?'':'none';
+}
+
 // ===================== CLOUD SYNC (JSONBin.io) =====================
 var BIN_ID  = '6a1a425d21f9ee59d29c4db6';
 var API_KEY = '$2a$10$CYLuejjwj9ruPCJltdfUK.WT1WODipV1ljGwzJgjcVAgLxYbPIPSi';
@@ -1188,10 +1335,11 @@ function getAppearance(){
 
 function saveState(){
   var data = {
-    classes:  S.classes,
-    consults: S.consults,
-    schedule: S.schedule,
-    appear:   getAppearance()
+    classes:   S.classes,
+    consults:  S.consults,
+    schedule:  S.schedule,
+    appear:    getAppearance(),
+    passwords: AUTH.passwords
   };
   var json = JSON.stringify(data);
   if(json === _lastSaveData) return; // nothing changed
@@ -1220,6 +1368,7 @@ function loadState(callback){
   .then(function(r){ return r.json(); })
   .then(function(res){
     var saved = res.record;
+    if(saved && saved.passwords) AUTH.passwords = Object.assign(AUTH.passwords, saved.passwords);
     if(saved && saved.classes  && saved.classes.length)  S.classes  = saved.classes;
     if(saved && saved.consults && saved.consults.length) S.consults = saved.consults;
     if(saved && saved.schedule) S.schedule = saved.schedule;
@@ -1279,6 +1428,12 @@ function resetAll(){
 }
 
 initSwatches();
+// Restore session role if still active
+try{
+  var _sr = sessionStorage.getItem('auth_role');
+  if(_sr && ROLE_LABELS[_sr]) AUTH.role = _sr;
+}catch(e){}
+applyRoleUI();
 loadState(function(){
   applyTheme(curTheme);
   render();
