@@ -99,6 +99,43 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 /* Top bar */
 .top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem;position:sticky;top:0;z-index:50;background:var(--card-bg);padding:.6rem 1rem;margin:-1.5rem -1.5rem 1rem -1.5rem;border-bottom:1px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.06)}
 
+@media(max-width:600px){
+  /* Фиксируем только заголовок, тонкой полоской */
+  .top-bar{
+    position:fixed;
+    top:0;left:0;right:0;
+    padding:.4rem .75rem;
+    margin:0;
+    flex-wrap:nowrap;
+    z-index:200;
+  }
+  .top-bar h1{
+    font-size:14px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    flex:1;
+    min-width:0;
+  }
+  /* Кнопки в шапке на мобиле — скрываем, переносим под заголовок */
+  .top-bar>div{display:none}
+  /* Плавающая панель кнопок под заголовком, прокручивается */
+  .mobile-btn-bar{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    padding:.5rem .75rem;
+    background:var(--card-bg);
+    border-bottom:1px solid var(--border);
+    margin-bottom:.75rem;
+  }
+  .mobile-btn-bar button{font-size:11px;padding:5px 8px}
+  /* Отступ сверху чтобы контент не перекрывался фиксированным заголовком */
+  body{padding-top:3.5rem}
+  /* Tabs тоже учитывают отступ */
+  .tabs{margin-top:.25rem}
+}
+
 /* ===== MOBILE ===== */
 @media(max-width:600px){
   body{padding:.75rem}
@@ -173,6 +210,7 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
     <button id="btn-reset" onclick="resetAll()" style="font-size:12px;border-color:#ea580c;color:#9a3412;display:none">↺</button>
   </div>
 </div>
+<div class="mobile-btn-bar" id="mobile-btn-bar" style="display:none"></div>
 <div id="warn-bar" class="warn-bar"></div>
 
 <div class="tabs" id="tabs"></div>
@@ -1336,6 +1374,28 @@ function applyRoleUI(){
   document.getElementById('btn-appear').style.display  = canAppear()?'':'none';
   document.getElementById('btn-undo').style.display    = canEdit()?'':'none';
   updateUndoBtn();
+  updateMobileBtnBar();
+}
+
+function updateMobileBtnBar(){
+  var bar = document.getElementById('mobile-btn-bar');
+  if(!bar) return;
+  var isMobile = window.innerWidth <= 600;
+  bar.style.display = isMobile ? 'flex' : 'none';
+  if(!isMobile) return;
+  var html = '';
+  html += '<span class="role-badge '+ROLE_LABELS[AUTH.role].cls+'" style="font-size:11px;padding:3px 8px">'+ROLE_LABELS[AUTH.role].icon+' '+ROLE_LABELS[AUTH.role].label+'</span>';
+  if(AUTH.role==='viewer'){
+    html += '<button onclick="openOverlay(\'m-login\',this)" style="font-size:11px;padding:5px 8px">🔑 Войти</button>';
+  } else {
+    html += '<button onclick="doLogout()" style="font-size:11px;padding:5px 8px">Выйти</button>';
+    if(canEdit()) html += '<button id="mob-undo" onclick="doUndo()" style="font-size:11px;padding:5px 8px;opacity:0.4" disabled>↩ Отмена</button>';
+  }
+  html += '<button onclick="exportPng()" style="font-size:11px;padding:5px 8px">📷 PNG</button>';
+  if(canAppear()) html += '<button onclick="openOverlay(\'m-appear\',this)" style="font-size:11px;padding:5px 8px">⚙ Вид</button>';
+  if(isZavuch())  html += '<button onclick="resetAll()" style="font-size:11px;padding:5px 8px;border-color:#ea580c;color:#9a3412">↺ Сброс</button>';
+  bar.innerHTML = html;
+  updateUndoBtn();
 }
 
 // ===================== UNDO HISTORY =====================
@@ -1373,12 +1433,17 @@ function doUndo(){
 
 function updateUndoBtn(){
   var btn = document.getElementById('btn-undo');
-  if(!btn) return;
-  btn.disabled = UNDO_STACK.length === 0;
-  btn.title = UNDO_STACK.length
+  var mob = document.getElementById('mob-undo');
+  var hasUndo = UNDO_STACK.length > 0;
+  var title = hasUndo
     ? 'Отменить последнее действие (доступно: '+UNDO_STACK.length+')'
     : 'Нет действий для отмены';
-  btn.style.opacity = UNDO_STACK.length ? '1' : '0.4';
+  [btn, mob].forEach(function(b){
+    if(!b) return;
+    b.disabled = !hasUndo;
+    b.title = title;
+    b.style.opacity = hasUndo ? '1' : '0.4';
+  });
 }
 
 // ===================== CLOUD SYNC (JSONBin.io) =====================
@@ -1502,6 +1567,7 @@ loadState(function(){
   applyTheme(curTheme);
   render();
 });
+window.addEventListener('resize', function(){ updateMobileBtnBar(); updateUndoBtn(); });
 </script>
 </body>
 </html>
