@@ -168,7 +168,8 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
     <button id="btn-login" onclick="openOverlay('m-login',this)" style="font-size:12px">🔑 Войти</button>
     <button id="btn-logout" onclick="doLogout()" style="font-size:12px;display:none">Выйти</button>
     <button onclick="exportPng()" id="btn-export" style="font-size:12px">📷 PNG</button>
-    <button onclick="openOverlay('m-appear',this)" style="font-size:12px">⚙</button>
+    <button id="btn-undo" onclick="doUndo()" style="font-size:12px;display:none" title="Отменить последнее действие">↩ Отмена</button>
+    <button id="btn-appear" onclick="openOverlay('m-appear',this)" style="font-size:12px;display:none">⚙</button>
     <button id="btn-reset" onclick="resetAll()" style="font-size:12px;border-color:#ea580c;color:#9a3412;display:none">↺</button>
   </div>
 </div>
@@ -642,7 +643,10 @@ function renderClassPanel(){
   var chips=cls.students.length===0
     ?'<span class="ghost">Нет учеников</span>'
     :cls.students.map(function(s){
-      return '<span class="chip">'+e(shortName(s))+'<button class="chip-x" onclick="removeStudent(\''+e(cls.id)+'\',\''+e(s)+'\')">×</button></span>';
+      var xBtn = canManageClasses()
+        ? '<button class="chip-x" onclick="removeStudent(\''+e(cls.id)+'\',\''+e(s)+'\')">×</button>'
+        : '';
+      return '<span class="chip">'+e(shortName(s))+xBtn+'</span>';
     }).join('');
   var delBtn = canManageClasses()
     ? '<button class="btn-red" style="font-size:12px" onclick="askDelClass(\''+e(cls.id)+'\',this)">&#128465; Удалить класс</button>'
@@ -1262,19 +1266,24 @@ var ROLE_LABELS = {
 
 function canEdit(){   return AUTH.role==='teacher'||AUTH.role==='klass'||AUTH.role==='zavuch'; }
 function canManageClasses(){ return AUTH.role==='klass'||AUTH.role==='zavuch'; }
+function canAppear(){ return AUTH.role==='klass'||AUTH.role==='zavuch'; }
 function isZavuch(){  return AUTH.role==='zavuch'; }
 
 function doLogin(){
   var pw = document.getElementById('f-password').value;
   var err = document.getElementById('login-err');
   var matched = null;
-  // Check against stored passwords (may be updated by zavuch)
   var passwords = AUTH.passwords;
-  if(pw === passwords.zavuch)  matched='zavuch';
+  if(pw === passwords.zavuch)       matched='zavuch';
   else if(pw === passwords.klass)   matched='klass';
   else if(pw === passwords.teacher) matched='teacher';
 
-  if(!matched){ err.style.display='block'; return; }
+  if(!matched){
+    err.style.display='block';
+    document.getElementById('f-password').value=''; // очистить при ошибке
+    setTimeout(function(){document.getElementById('f-password').focus();},50);
+    return;
+  }
   err.style.display='none';
   document.getElementById('f-password').value='';
   AUTH.role = matched;
@@ -1312,9 +1321,55 @@ function applyRoleUI(){
   var badge = document.getElementById('role-badge');
   badge.textContent = r.icon+' '+r.label;
   badge.className = 'role-badge '+r.cls;
-  document.getElementById('btn-login').style.display  = AUTH.role==='viewer'?'':'none';
-  document.getElementById('btn-logout').style.display = AUTH.role==='viewer'?'none':'';
-  document.getElementById('btn-reset').style.display  = isZavuch()?'':'none';
+  document.getElementById('btn-login').style.display   = AUTH.role==='viewer'?'':'none';
+  document.getElementById('btn-logout').style.display  = AUTH.role==='viewer'?'none':'';
+  document.getElementById('btn-reset').style.display   = isZavuch()?'':'none';
+  document.getElementById('btn-appear').style.display  = canAppear()?'':'none';
+  document.getElementById('btn-undo').style.display    = canEdit()?'':'none';
+  updateUndoBtn();
+}
+
+// ===================== UNDO HISTORY =====================
+var UNDO_STACK = [];
+var MAX_UNDO = 20;
+
+function snapshotState(){
+  return JSON.stringify({
+    classes:  S.classes,
+    consults: S.consults,
+    schedule: S.schedule
+  });
+}
+
+function pushUndo(){
+  if(!canEdit()) return;
+  var snap = snapshotState();
+  // Don't push duplicate
+  if(UNDO_STACK.length && UNDO_STACK[UNDO_STACK.length-1]===snap) return;
+  UNDO_STACK.push(snap);
+  if(UNDO_STACK.length > MAX_UNDO) UNDO_STACK.shift();
+  updateUndoBtn();
+}
+
+function doUndo(){
+  if(!UNDO_STACK.length) return;
+  var snap = JSON.parse(UNDO_STACK.pop());
+  S.classes  = snap.classes;
+  S.consults = snap.consults;
+  S.schedule = snap.schedule;
+  updateUndoBtn();
+  _render();   // render without pushing another snapshot
+  saveState();
+}
+
+function updateUndoBtn(){
+  var btn = document.getElementById('btn-undo');
+  if(!btn) return;
+  btn.disabled = UNDO_STACK.length === 0;
+  btn.title = UNDO_STACK.length
+    ? 'Отменить последнее действие (доступно: '+UNDO_STACK.length+')'
+    : 'Нет действий для отмены';
+  btn.style.opacity = UNDO_STACK.length ? '1' : '0.4';
 }
 
 // ===================== CLOUD SYNC (JSONBin.io) =====================
@@ -1407,9 +1462,10 @@ setInterval(function(){
   }).catch(function(){});
 }, 30000);
 
-// Patch render() to auto-save after every change
+// Patch render() to auto-save and push undo after every change
 var _render = render;
 render = function(){
+  pushUndo();
   _render();
   saveState();
 };
