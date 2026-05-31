@@ -97,7 +97,7 @@ table.sched td:first-child{min-width:150px;background:var(--td-first-bg)}
 .leg{display:flex;align-items:center;gap:5px}
 .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 /* Top bar */
-.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem;position:sticky;top:0;z-index:50;background:var(--card-bg);padding:.6rem 1rem;margin:-1.5rem -1.5rem 1rem -1.5rem;border-bottom:1px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.06)}
 
 /* ===== MOBILE ===== */
 @media(max-width:600px){
@@ -864,6 +864,7 @@ function saveConsult(){
   var ts=document.getElementById('f-ts').value;
   var te=document.getElementById('f-te').value;
   if(!subj) return;
+  pushUndo();
   if(S.editingConsult){
     var q=S.consults.find(function(x){return x.id===S.editingConsult;});
     if(q){q.subject=subj;q.teacher=teacher;q.date=date;q.ts=ts;q.te=te;}
@@ -911,6 +912,7 @@ function savePick(){
     if(!map[cid]) map[cid]=[];
     if(cb.checked) map[cid].push(cb.value);
   });
+  pushUndo();
   Object.keys(map).forEach(function(cid){setAssigned(qid,cid,map[cid]);});
   closeOverlay('m-pick');render();
 }
@@ -926,6 +928,7 @@ function openCopyModal(qid, anchor){
 function saveCopy(){
   var src=S.consults.find(function(q){return q.id===S.copyContext.qid;});
   if(!src||!S.copyDates.length){closeOverlay('m-copy');return;}
+  pushUndo();
   S.copyDates.forEach(function(d){
     if(d===src.date) return;
     var newId='q'+Date.now()+Math.random().toString(36).slice(2,5);
@@ -939,6 +942,7 @@ function saveCopy(){
 function saveClass(){
   var name=document.getElementById('f-class-name').value.trim();
   if(!name) return;
+  pushUndo();
   var id='c'+Date.now();
   S.classes.push({id:id,name:name,students:[]});
   S.active=id;
@@ -951,6 +955,7 @@ function askDelClass(cid, anchor){
   openOverlay('m-del-class', anchor);
 }
 function confirmDelClass(){
+  pushUndo();
   var cid=S.pendingDelClass;
   S.classes=S.classes.filter(function(c){return c.id!==cid;});
   Object.keys(S.schedule).forEach(function(qid){if(S.schedule[qid])delete S.schedule[qid][cid];});
@@ -959,6 +964,7 @@ function confirmDelClass(){
 }
 function askDelConsult(qid, anchor){S.pendingDelConsult=qid;openOverlay('m-del-consult', anchor);}
 function confirmDelConsult(){
+  pushUndo();
   var qid=S.pendingDelConsult;
   S.consults=S.consults.filter(function(q){return q.id!==qid;});
   delete S.schedule[qid];
@@ -970,16 +976,19 @@ function addStudent(cid){
   if(!raw) return;
   var cls=S.classes.find(function(c){return c.id===cid;});
   if(!cls) return;
-  // Auto-create short if not in lookup
   if(!SHORT[raw]){
     var parts=raw.split(' ');
     SHORT[raw]=parts[0]+(parts[1]?' '+parts[1][0]+'.':'');
   }
-  if(cls.students.indexOf(raw)<0){cls.students.push(raw);inp.value='';render();}
+  if(cls.students.indexOf(raw)<0){
+    pushUndo();
+    cls.students.push(raw);inp.value='';render();
+  }
 }
 function removeStudent(cid,name){
   var cls=S.classes.find(function(c){return c.id===cid;});
   if(!cls) return;
+  pushUndo();
   cls.students=cls.students.filter(function(s){return s!==name;});
   Object.keys(S.schedule).forEach(function(qid){
     if(S.schedule[qid]&&S.schedule[qid][cid])
@@ -1462,10 +1471,9 @@ setInterval(function(){
   }).catch(function(){});
 }, 30000);
 
-// Patch render() to auto-save and push undo after every change
+// Patch render() to auto-save only (NO pushUndo here)
 var _render = render;
 render = function(){
-  pushUndo();
   _render();
   saveState();
 };
