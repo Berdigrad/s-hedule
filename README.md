@@ -1,3 +1,5 @@
+
+<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -1446,10 +1448,9 @@ function updateUndoBtn(){
   });
 }
 
-// ===================== CLOUD SYNC (JSONBin.io) =====================
-var BIN_ID  = '6a1a425d21f9ee59d29c4db6';
-var API_KEY = '$2a$10$CYLuejjwj9ruPCJltdfUK.WT1WODipV1ljGwzJgjcVAgLxYbPIPSi';
-var BIN_URL = 'https://api.jsonbin.io/v3/b/' + BIN_ID;
+// ===================== CLOUD SYNC (Firebase Realtime Database) =====================
+var FB_URL = 'https://bsoschedule-default-rtdb.asia-southeast1.firebasedatabase.app/schedule.json';
+var FB_API_KEY = 'AIzaSyDOh_EuTYPcGpinN8bJHO51Jp-eu81dCRA';
 var _saveTimer = null;
 var _lastSaveData = '';
 
@@ -1471,32 +1472,32 @@ function saveState(){
     passwords: AUTH.passwords
   };
   var json = JSON.stringify(data);
-  if(json === _lastSaveData) return; // nothing changed
+  if(json === _lastSaveData) return;
   _lastSaveData = json;
-
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(function(){
-    fetch(BIN_URL, {
+    fetch(FB_URL + '?key=' + FB_API_KEY, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': API_KEY,
-        'X-Bin-Versioning': 'false'
-      },
+      headers: {'Content-Type': 'application/json'},
       body: json
-    }).catch(function(err){ console.warn('Сохранение не удалось:', err); });
-  }, 800); // debounce 800ms
+    }).then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      var s = document.getElementById('sync-status');
+      if(s){s.textContent='✓ Сохранено';setTimeout(function(){if(s)s.textContent='';},2000);}
+    }).catch(function(err){
+      var s = document.getElementById('sync-status');
+      if(s) s.textContent='⚠ Ошибка сохранения';
+      console.warn('Сохранение не удалось:', err);
+    });
+  }, 800);
 }
 
 function loadState(callback){
   var statusEl = document.getElementById('sync-status');
   if(statusEl) statusEl.textContent = '⏳ Загрузка...';
-  fetch(BIN_URL + '/latest', {
-    headers: { 'X-Master-Key': API_KEY }
-  })
+  fetch(FB_URL + '?key=' + FB_API_KEY)
   .then(function(r){ return r.json(); })
-  .then(function(res){
-    var saved = res.record;
+  .then(function(saved){
     if(saved && saved.passwords) AUTH.passwords = Object.assign(AUTH.passwords, saved.passwords);
     if(saved && saved.classes  && saved.classes.length)  S.classes  = saved.classes;
     if(saved && saved.consults && saved.consults.length) S.consults = saved.consults;
@@ -1508,8 +1509,7 @@ function loadState(callback){
       if(a.radius    && document.getElementById('sel-radius')) document.getElementById('sel-radius').value = a.radius;
       if(typeof a.themeIdx === 'number') curTheme = a.themeIdx;
     }
-    if(statusEl) statusEl.textContent = '✓ Синхронизировано';
-    setTimeout(function(){ if(statusEl) statusEl.textContent = ''; }, 2000);
+    if(statusEl){statusEl.textContent='✓ Загружено';setTimeout(function(){if(statusEl)statusEl.textContent='';},2000);}
     if(callback) callback();
   })
   .catch(function(err){
@@ -1519,19 +1519,19 @@ function loadState(callback){
   });
 }
 
-// Auto-reload every 30s to pick up changes from other users
+// Авто-обновление каждые 30 сек
 setInterval(function(){
-  fetch(BIN_URL + '/latest', { headers: { 'X-Master-Key': API_KEY } })
+  fetch(FB_URL + '?key=' + FB_API_KEY)
   .then(function(r){ return r.json(); })
-  .then(function(res){
-    var saved = res.record;
+  .then(function(saved){
+    if(!saved) return;
     var incoming = JSON.stringify({classes:saved.classes,consults:saved.consults,schedule:saved.schedule});
     var current  = JSON.stringify({classes:S.classes,   consults:S.consults,   schedule:S.schedule});
     if(incoming !== current){
       if(saved.classes  && saved.classes.length)  S.classes  = saved.classes;
       if(saved.consults && saved.consults.length) S.consults = saved.consults;
       if(saved.schedule) S.schedule = saved.schedule;
-      _render(); // render without triggering save
+      _render();
     }
   }).catch(function(){});
 }, 30000);
