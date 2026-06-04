@@ -592,20 +592,31 @@ function conflictingWith(qid){
   if(!q) return [];
   return S.consults.filter(function(qq){return timesOverlap(q,qq);}).map(function(qq){return qq.id;});
 }
-function allConflictStudents(){
-  var res={};
+// Returns Set of "qid|name" pairs that have a real conflict
+function buildConflictPairs(){
+  var pairs={};
   S.consults.forEach(function(q){
     var cfs=conflictingWith(q.id);
     if(!cfs.length) return;
     S.classes.forEach(function(c){
       getAssigned(q.id,c.id).forEach(function(name){
         cfs.forEach(function(cqid){
-          if(getAssigned(cqid,c.id).indexOf(name)>=0) res[name]=true;
+          if(getAssigned(cqid,c.id).indexOf(name)>=0){
+            pairs[q.id+'|'+name]=true;
+            pairs[cqid+'|'+name]=true;
+          }
         });
       });
     });
   });
-  return res;
+  return pairs;
+}
+// For warn bar: unique student names that have any conflict
+function allConflictStudents(){
+  var pairs=buildConflictPairs();
+  var names={};
+  Object.keys(pairs).forEach(function(k){ names[k.split('|')[1]]=true; });
+  return names;
 }
 
 // ===================== FORMATTING =====================
@@ -711,7 +722,7 @@ function renderSchedule(){
   });
   var dates=[];
   sorted.forEach(function(q){if(dates.indexOf(q.date)<0) dates.push(q.date);});
-  var conflictStudents=allConflictStudents();
+  var conflictPairs=buildConflictPairs();
   var COLS=4;
   var blocks=[];
   for(var i=0;i<dates.length;i+=COLS) blocks.push(dates.slice(i,i+COLS));
@@ -753,7 +764,7 @@ function renderSchedule(){
           S.classes.forEach(function(c){
             var lbl=assignLabel(q.id,c.id);
             if(!lbl) return;
-            var hasConf=getAssigned(q.id,c.id).some(function(n){return conflictStudents[n];});
+            var hasConf=getAssigned(q.id,c.id).some(function(n){return conflictPairs[q.id+'|'+n];});
             labelsHtml+='<div class="assign-label'+(hasConf?' conflict':'')+'">'+e(lbl)+'</div>';
           });
           if(qi>0) html+='<div style="height:1px;background:var(--border);margin:4px 0"></div>';
@@ -1123,7 +1134,7 @@ function doExportPng(){
     var key=q.ts+'|'+q.te;
     if(!timeSlots.find(function(t){return t.key===key;}))timeSlots.push({key:key,ts:q.ts,te:q.te});
   });
-  var conflictStudents=allConflictStudents();
+  var conflictPairs=buildConflictPairs();
 
   var cs=getComputedStyle(document.body);
   var cBg=cs.backgroundColor||'#f4f4f2';
@@ -1170,7 +1181,7 @@ function doExportPng(){
         var lbl=assignLabel(q.id,c.id);
         if(!lbl)return;
         hasAny=true;
-        var hasConf=getAssigned(q.id,c.id).some(function(n){return conflictStudents[n];});
+        var hasConf=getAssigned(q.id,c.id).some(function(n){return conflictPairs[q.id+'|'+n];});
         rows.push({text:lbl,color:hasConf?'#9a3412':cText,bold:false,small:false});
       });
       if(!hasAny) rows.push({text:'Никто не назначен',color:cMuted,bold:false,small:true});
